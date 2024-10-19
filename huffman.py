@@ -1,3 +1,6 @@
+from functools import reduce
+from math import ceil
+
 class HuffmanTree:
     def __init__(self, freq: int, key: chr):
         self.map = {}
@@ -58,16 +61,15 @@ def create_huffman_tree(array: [HuffmanTree]):
 
 
 def bits_to_bytes(bits: str) -> (bytearray, str):
-    n = len(bits)
     out = bytearray()
 
     def extract(out: bytearray, bits: str, bit_size: int):
-        j = int(n / bit_size)
+        j = int(len(bits) / bit_size)
         byte_sz = int(bit_size / 8)
 
         if j > 0:
-            for i in range(0, len(bits), bit_size):
-                val = int("".join(bits[i : i + bit_size]), 2)
+            for i in range(j):
+                val = int("".join(bits[i * bit_size : i * bit_size + bit_size]), 2)
                 out.extend(val.to_bytes(byte_sz, "little"))
 
             bits = bits[j * bit_size :]
@@ -81,6 +83,33 @@ def bits_to_bytes(bits: str) -> (bytearray, str):
 
     return (out, bits)
 
+def get_bits_required(n: int, freqs, huffman_map) -> int:
+    ratio = 0
+    
+    for k,v in huffman_map.items():
+        ratio += (freqs[k] / n) * len(v)
+        
+    return ceil(n * ratio)
+
+def get_total_bits_for_window(content, window_sz) -> int:
+    freq_map = {}
+
+    for i in range(0, len(content), window_sz):
+        b = int.from_bytes(content[i:i+window_sz], "little")
+        
+        if b in freq_map:
+            freq_map[b] += 1
+        else:
+            freq_map[b] = 1
+            
+    huffman_tree = create_huffman_tree([
+            HuffmanTree(v, k)
+            for k, v in sorted(freq_map.items(), key=lambda item: item[1])
+    ])[0]
+    
+    huffman_tree.generate_map()
+    
+    return get_bits_required(int(ceil(len(content) / window_sz)), freq_map, huffman_tree.map)
 
 def encode(filename) -> bytearray:
     compressed = bytearray()
@@ -109,8 +138,9 @@ def encode(filename) -> bytearray:
             ba, extra = bits_to_bytes(remainder + huffman_tree.map[b])
             compressed.extend(ba)
             remainder = extra
-            
+        
         if len(remainder) > 0:
+            remainder += "0" * (8 - len(remainder))
             compressed.extend(int(remainder, 2).to_bytes(1, "little"))
             
     return compressed
